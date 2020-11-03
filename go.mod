@@ -37,3 +37,5 @@ require (
 )
 
 replace go.etcd.io/etcd/v3 => go.etcd.io/etcd/v3 v3.3.0-rc.0.0.20200707003333-58bb8ae09f8e
+
+replace github.com/minio/minio => ../minio/

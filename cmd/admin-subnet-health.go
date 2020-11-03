@@ -115,6 +115,19 @@ func tarGZ(c clusterOBDStruct, alias string) error {
 	defer gzWriter.Close()
 
 	enc := gojson.NewEncoder(gzWriter)
+
+	header := madmin.HealthReportHeader{
+		Subnet: madmin.Health{
+			Health: madmin.Version{
+				Version: "v1",
+			},
+		},
+	}
+
+	if err := enc.Encode(header); err != nil {
+		return err
+	}
+
 	if err := enc.Encode(c); err != nil {
 		return err
 	}
