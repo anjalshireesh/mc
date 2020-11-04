@@ -32,6 +32,7 @@ import (
 	"github.com/minio/cli"
 	json "github.com/minio/mc/pkg/colorjson"
 	"github.com/minio/mc/pkg/probe"
+	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -73,18 +74,19 @@ EXAMPLES:
 `,
 }
 
-type clusterOBDStruct struct {
-	Status string         `json:"status"`
-	Error  string         `json:"error,omitempty"`
-	Info   madmin.OBDInfo `json:"obdInfo,omitempty"`
+type clusterHealth struct {
+	Status   string                `json:"status"`
+	Error    string                `json:"error,omitempty"`
+	Hardware madmin.HealthInfoHwV1 `json:"hardware,omitempty"`
+	Software madmin.HealthInfoSwV1 `json:"software,omitempty"`
 }
 
-func (u clusterOBDStruct) String() string {
+func (u clusterHealth) String() string {
 	return u.JSON()
 }
 
 // JSON jsonifies service status message.
-func (u clusterOBDStruct) JSON() string {
+func (u clusterHealth) JSON() string {
 	statusJSONBytes, e := json.MarshalIndent(u, " ", "    ")
 	fatalIf(probe.NewError(e), "Unable to marshal into JSON.")
 
@@ -99,7 +101,7 @@ func checkAdminOBDSyntax(ctx *cli.Context) {
 }
 
 //compress and tar obd output
-func tarGZ(c clusterOBDStruct, alias string) error {
+func tarGZ(c clusterHealth, alias string) error {
 	filename := fmt.Sprintf("%s-health_%s.json.gz", filepath.Clean(alias), time.Now().Format("20060102150405"))
 	f, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR, 0666)
 	if err != nil {
@@ -254,7 +256,7 @@ func mainAdminOBD(ctx *cli.Context) error {
 		}
 	}
 
-	clusterOBDInfo := clusterOBDStruct{}
+	clusterOBDInfo := clusterHealth{}
 
 	admin := spinner("Admin Info", madmin.OBDDataTypeMinioInfo)
 	cpu := spinner("CPU Info", madmin.OBDDataTypeSysCPU)
@@ -266,7 +268,7 @@ func mainAdminOBD(ctx *cli.Context) error {
 	drive := spinner("Drive Test", madmin.OBDDataTypePerfDrive)
 	net := spinner("Network Test", madmin.OBDDataTypePerfNet)
 
-	progress := func(info madmin.OBDInfo) {
+	progress := func(info madmin.HealthInfo) {
 		_ = admin(len(info.Minio.Info.Servers) > 0) &&
 			cpu(len(info.Sys.CPUInfo) > 0) &&
 			diskHw(len(info.Sys.DiskHwInfo) > 0) &&
@@ -278,24 +280,146 @@ func mainAdminOBD(ctx *cli.Context) error {
 			net(len(info.Perf.Net) > 1 && len(info.Perf.NetParallel.Addr) > 0)
 	}
 
+	healthInfo := madmin.HealthInfo{}
+
 	// Fetch info of all servers (cluster or single server)
-	obdChan := client.ServerOBDInfo(cont, *opts, ctx.Duration("deadline"))
-	for adminOBDInfo := range obdChan {
-		if adminOBDInfo.Error != "" {
+	obdChan := client.ServerHealthInfo(cont, *opts, ctx.Duration("deadline"))
+	for adminHealthInfo := range obdChan {
+		if adminHealthInfo.Error != "" {
 			clusterOBDInfo.Status = "Error"
-			clusterOBDInfo.Error = adminOBDInfo.Error
-			clusterOBDInfo.Info.Error = ""
-			clusterOBDInfo.Info.Minio.Info = madmin.InfoMessage{}
+			clusterOBDInfo.Error = adminHealthInfo.Error
 			break
 		}
 
 		clusterOBDInfo.Status = "Success"
-		clusterOBDInfo.Info = adminOBDInfo
-		progress(adminOBDInfo)
+		healthInfo = adminHealthInfo
+		progress(adminHealthInfo)
 	}
 
 	// cancel the context if obdChan has returned.
 	cancel()
+
+	hw := madmin.HealthInfoHwV1{Servers: []madmin.HwServerV1{}}
+
+	serverAddrs := set.NewStringSet()
+
+	// Map CPU info
+	serverCPUs := map[string][]madmin.HwCPUV1{}
+	for _, ci := range healthInfo.Sys.CPUInfo {
+		cpus, ok := serverCPUs[ci.Addr]
+		if !ok {
+			cpus = []madmin.HwCPUV1{}
+		}
+		cpus = append(cpus, madmin.HwCPUV1{
+			CPUStat:   ci.CPUStat,
+			TimesStat: ci.TimeStat,
+			Error:     ci.Error,
+		})
+		serverCPUs[ci.Addr] = cpus
+	}
+
+	// Map memory info
+	serverMems := map[string][]madmin.HwMemV1{}
+	for _, mi := range healthInfo.Sys.MemInfo {
+		mems, ok := serverMems[mi.Addr]
+		if !ok {
+			mems = []madmin.HwMemV1{}
+		}
+		mems = append(mems, madmin.HwMemV1{
+			SwapMem:    mi.SwapMem,
+			VirtualMem: mi.VirtualMem,
+			Error:      mi.Error,
+		})
+		serverMems[mi.Addr] = mems
+	}
+
+	// Map network info
+	serverNetPerfSerial := map[string][]madmin.NetPerfInfo{}
+
+	for _, serverPerf := range healthInfo.Perf.Net {
+		serverNetPerfSerial[serverPerf.Addr] = serverPerf.Net
+	}
+
+	serverNetPerfParallel := map[string][]madmin.NetPerfInfo{}
+	serverNetPerfParallel[healthInfo.Perf.NetParallel.Addr] = healthInfo.Perf.NetParallel.Net
+
+	serverNetworks := map[string][]madmin.HwNetworkV1{}
+	for _, srvr := range healthInfo.Minio.Info.Servers {
+		for addr, status := range srvr.Network {
+			nets, ok := serverNetworks[srvr.Endpoint]
+			if !ok {
+				nets = []madmin.HwNetworkV1{}
+			}
+
+			nets = append(nets, madmin.HwNetworkV1{
+				Addr:   addr,
+				Status: status,
+			})
+			serverNetworks[srvr.Endpoint] = nets
+		}
+
+	}
+
+	serverDrivePerf := map[string]madmin.HwDrivePerfV1{}
+	for _, drivePerf := range healthInfo.Perf.DriveInfo {
+		dp := madmin.HwDrivePerfV1{
+			Serial:   drivePerf.Serial,
+			Parallel: drivePerf.Parallel,
+			Error:    drivePerf.Error,
+		}
+		serverDrivePerf[drivePerf.Addr] = dp
+	}
+
+	for addr := range serverCPUs {
+		serverAddrs.Add(addr)
+	}
+
+	for addr := range serverMems {
+		serverAddrs.Add(addr)
+	}
+
+	for addr := range serverNetworks {
+		serverAddrs.Add(addr)
+	}
+
+	for addr := range serverNetPerfSerial {
+		serverAddrs.Add(addr)
+	}
+
+	serverAddrs.Add(healthInfo.Perf.NetParallel.Addr)
+
+	for addr := range serverDrivePerf {
+		serverAddrs.Add(addr)
+	}
+
+	// Merge all hw info into servers
+	for addr := range serverAddrs {
+		perf := madmin.HwPerfV1{
+			Net: madmin.HwNetPerfV1{
+				Serial:   serverNetPerfSerial[addr],
+				Parallel: serverNetPerfParallel[addr],
+			},
+			Drive: serverDrivePerf[addr],
+		}
+		hw.Servers = append(hw.Servers, madmin.HwServerV1{
+			Addr:    addr,
+			CPUs:    serverCPUs[addr],
+			MemInfo: serverMems[addr],
+			Network: serverNetworks[addr],
+			Perf:    perf,
+		})
+	}
+
+	clusterOBDInfo.Hardware = hw
+	clusterOBDInfo.Software = madmin.HealthInfoSwV1{
+		Minio: madmin.MinioHealthInfoV1{
+			Info:     healthInfo.Minio.Info,
+			Config:   healthInfo.Minio.Config,
+			Error:    healthInfo.Minio.Error,
+			ProcInfo: healthInfo.Sys.ProcInfo,
+		},
+		OsInfo: healthInfo.Sys.OsInfo,
+	}
 
 	if globalJSON {
 		printMsg(clusterOBDInfo)
