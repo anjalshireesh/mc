@@ -22,9 +22,7 @@ import "github.com/minio/minio/pkg/madmin"
 // ReportInfo - interface to be implemented by health report schema struct
 type ReportInfo interface {
 	getStatus() string
-	setStatus(status string)
 	getError() string
-	setError(error string)
 	message
 	mapHealthInfo(healthInfo madmin.HealthInfo, err error) ReportInfo
 }

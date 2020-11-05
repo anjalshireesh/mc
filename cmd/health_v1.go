@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"reflect"
 
 	"github.com/minio/mc/pkg/probe"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -34,11 +35,10 @@ type HwServersV1 struct {
 
 // HwServerV1 - server health Info
 type HwServerV1 struct {
-	Addr    string        `json:"addr"`
-	CPUs    []HwCPUV1     `json:"cpus,omitempty"`
-	MemInfo []HwMemV1     `json:"meminfos,omitempty"`
-	Network []HwNetworkV1 `json:"network,omitempty"`
-	Perf    HwPerfV1      `json:"perf,omitempty"`
+	Addr    string    `json:"addr"`
+	CPUs    []HwCPUV1 `json:"cpus,omitempty"`
+	MemInfo []HwMemV1 `json:"meminfos,omitempty"`
+	Perf    HwPerfV1  `json:"perf,omitempty"`
 }
 
 // HwCPUV1 - CPU Info
@@ -53,13 +53,6 @@ type HwMemV1 struct {
 	SwapMem    *mem.SwapMemoryStat    `json:"swap,omitempty"`
 	VirtualMem *mem.VirtualMemoryStat `json:"virtualmem,omitempty"`
 	Error      string                 `json:"error,omitempty"`
-}
-
-// HwNetworkV1 - Network info
-type HwNetworkV1 struct {
-	Addr   string `json:"addr"`
-	Status string `json:"status"`
-	Error  string `json:"error,omitempty"`
 }
 
 // HwPerfV1 - hardware performance
@@ -119,31 +112,71 @@ func (ch ClusterHealthV1) getStatus() string {
 	return ch.Status
 }
 
-func (ch ClusterHealthV1) setStatus(status string) {
-	ch.Status = status
-}
-
 func (ch ClusterHealthV1) getError() string {
 	return ch.Error
-}
-
-func (ch ClusterHealthV1) setError(error string) {
-	ch.Error = error
 }
 
 func (ch ClusterHealthV1) mapHealthInfo(healthInfo madmin.HealthInfo, err error) ReportInfo {
 	if err != nil {
 		ch.Status = "Error"
 		ch.Error = err.Error()
+		// TODO: Should we return here? Compare with original code
 	} else {
 		ch.Status = "Success"
 	}
 
-	hw := HwServersV1{Servers: []HwServerV1{}}
-
 	serverAddrs := set.NewStringSet()
 
-	// Map CPU info
+	serverCPUs := mapServerCPUs(healthInfo)
+	serverMems := mapServerMems(healthInfo)
+	serverNetPerfSerial, serverNetPerfParallel := mapServerNetPerf(healthInfo)
+	serverDrivePerf := mapServerDrivePerf(healthInfo)
+
+	addKeysToSet(reflect.ValueOf(serverCPUs).MapKeys(), &serverAddrs)
+	addKeysToSet(reflect.ValueOf(serverMems).MapKeys(), &serverAddrs)
+	addKeysToSet(reflect.ValueOf(serverNetPerfSerial).MapKeys(), &serverAddrs)
+	serverAddrs.Add(healthInfo.Perf.NetParallel.Addr)
+	addKeysToSet(reflect.ValueOf(serverDrivePerf).MapKeys(), &serverAddrs)
+
+	// Merge hardware info
+	hw := HwServersV1{Servers: []HwServerV1{}}
+	for addr := range serverAddrs {
+		perf := HwPerfV1{
+			Net: HwNetPerfV1{
+				Serial:   serverNetPerfSerial[addr],
+				Parallel: serverNetPerfParallel[addr],
+			},
+			Drive: serverDrivePerf[addr],
+		}
+		hw.Servers = append(hw.Servers, HwServerV1{
+			Addr:    addr,
+			CPUs:    serverCPUs[addr],
+			MemInfo: serverMems[addr],
+			Perf:    perf,
+		})
+	}
+
+	ch.Hardware = hw
+
+	ch.Software = SwInfoV1{
+		Minio: MinioHealthInfoV1{
+			Info:     healthInfo.Minio.Info,
+			Config:   healthInfo.Minio.Config,
+			Error:    healthInfo.Minio.Error,
+			ProcInfo: healthInfo.Sys.ProcInfo,
+		},
+		OsInfo: healthInfo.Sys.OsInfo,
+	}
+	return ch
+}
+
+func addKeysToSet(input []reflect.Value, output *set.StringSet) {
+	for _, key := range input {
+		output.Add(key.String())
+	}
+}
+
+func mapServerCPUs(healthInfo madmin.HealthInfo) map[string][]HwCPUV1 {
 	serverCPUs := map[string][]HwCPUV1{}
 	for _, ci := range healthInfo.Sys.CPUInfo {
 		cpus, ok := serverCPUs[ci.Addr]
@@ -157,8 +190,10 @@ func (ch ClusterHealthV1) mapHealthInfo(healthInfo madmin.HealthInfo, err error)
 		})
 		serverCPUs[ci.Addr] = cpus
 	}
+	return serverCPUs
+}
 
-	// Map memory info
+func mapServerMems(healthInfo madmin.HealthInfo) map[string][]HwMemV1 {
 	serverMems := map[string][]HwMemV1{}
 	for _, mi := range healthInfo.Sys.MemInfo {
 		mems, ok := serverMems[mi.Addr]
@@ -172,93 +207,29 @@ func (ch ClusterHealthV1) mapHealthInfo(healthInfo madmin.HealthInfo, err error)
 		})
 		serverMems[mi.Addr] = mems
 	}
+	return serverMems
+}
 
-	// Map network info
-	serverNetPerfSerial := map[string][]madmin.NetPerfInfo{}
-
+func mapServerNetPerf(healthInfo madmin.HealthInfo) (map[string][]madmin.NetPerfInfo, map[string][]madmin.NetPerfInfo) {
+	snpSerial := map[string][]madmin.NetPerfInfo{}
 	for _, serverPerf := range healthInfo.Perf.Net {
-		serverNetPerfSerial[serverPerf.Addr] = serverPerf.Net
+		snpSerial[serverPerf.Addr] = serverPerf.Net
 	}
 
-	serverNetPerfParallel := map[string][]madmin.NetPerfInfo{}
-	serverNetPerfParallel[healthInfo.Perf.NetParallel.Addr] = healthInfo.Perf.NetParallel.Net
+	snpParallel := map[string][]madmin.NetPerfInfo{}
+	snpParallel[healthInfo.Perf.NetParallel.Addr] = healthInfo.Perf.NetParallel.Net
 
-	serverNetworks := map[string][]HwNetworkV1{}
-	for _, srvr := range healthInfo.Minio.Info.Servers {
-		for addr, status := range srvr.Network {
-			nets, ok := serverNetworks[srvr.Endpoint]
-			if !ok {
-				nets = []HwNetworkV1{}
-			}
+	return snpSerial, snpParallel
+}
 
-			nets = append(nets, HwNetworkV1{
-				Addr:   addr,
-				Status: status,
-			})
-			serverNetworks[srvr.Endpoint] = nets
-		}
-
-	}
-
-	serverDrivePerf := map[string]HwDrivePerfV1{}
+func mapServerDrivePerf(healthInfo madmin.HealthInfo) map[string]HwDrivePerfV1 {
+	sdp := map[string]HwDrivePerfV1{}
 	for _, drivePerf := range healthInfo.Perf.DriveInfo {
-		dp := HwDrivePerfV1{
+		sdp[drivePerf.Addr] = HwDrivePerfV1{
 			Serial:   drivePerf.Serial,
 			Parallel: drivePerf.Parallel,
 			Error:    drivePerf.Error,
 		}
-		serverDrivePerf[drivePerf.Addr] = dp
 	}
-
-	for addr := range serverCPUs {
-		serverAddrs.Add(addr)
-	}
-
-	for addr := range serverMems {
-		serverAddrs.Add(addr)
-	}
-
-	for addr := range serverNetworks {
-		serverAddrs.Add(addr)
-	}
-
-	for addr := range serverNetPerfSerial {
-		serverAddrs.Add(addr)
-	}
-
-	serverAddrs.Add(healthInfo.Perf.NetParallel.Addr)
-
-	for addr := range serverDrivePerf {
-		serverAddrs.Add(addr)
-	}
-
-	// Merge all hw info into servers
-	for addr := range serverAddrs {
-		perf := HwPerfV1{
-			Net: HwNetPerfV1{
-				Serial:   serverNetPerfSerial[addr],
-				Parallel: serverNetPerfParallel[addr],
-			},
-			Drive: serverDrivePerf[addr],
-		}
-		hw.Servers = append(hw.Servers, HwServerV1{
-			Addr:    addr,
-			CPUs:    serverCPUs[addr],
-			MemInfo: serverMems[addr],
-			Network: serverNetworks[addr],
-			Perf:    perf,
-		})
-	}
-
-	ch.Hardware = hw
-	ch.Software = SwInfoV1{
-		Minio: MinioHealthInfoV1{
-			Info:     healthInfo.Minio.Info,
-			Config:   healthInfo.Minio.Config,
-			Error:    healthInfo.Minio.Error,
-			ProcInfo: healthInfo.Sys.ProcInfo,
-		},
-		OsInfo: healthInfo.Sys.OsInfo,
-	}
-	return ch
+	return sdp
 }
