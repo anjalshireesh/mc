@@ -25,6 +25,7 @@ require (
 	github.com/posener/complete v1.2.3
 	github.com/rjeczalik/notify v0.9.2
 	github.com/rs/xid v1.2.1
+	github.com/shirou/gopsutil v2.20.3-0.20200314133625-53cec6b37e6a+incompatible
 	github.com/tinylib/msgp v1.1.3 // indirect
 	github.com/ttacon/chalk v0.0.0-20160626202418-22c06c80ed31 // indirect
 	golang.org/x/crypto v0.0.0-20201012173705-84dcc777aaee

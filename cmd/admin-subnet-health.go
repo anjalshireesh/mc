@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	gojson "encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -30,9 +31,6 @@ import (
 	"github.com/fatih/color"
 	"github.com/klauspost/compress/gzip"
 	"github.com/minio/cli"
-	json "github.com/minio/mc/pkg/colorjson"
-	"github.com/minio/mc/pkg/probe"
-	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -74,34 +72,15 @@ EXAMPLES:
 `,
 }
 
-type clusterHealth struct {
-	Status   string                `json:"status"`
-	Error    string                `json:"error,omitempty"`
-	Hardware madmin.HealthInfoHwV1 `json:"hardware,omitempty"`
-	Software madmin.HealthInfoSwV1 `json:"software,omitempty"`
-}
-
-func (u clusterHealth) String() string {
-	return u.JSON()
-}
-
-// JSON jsonifies service status message.
-func (u clusterHealth) JSON() string {
-	statusJSONBytes, e := json.MarshalIndent(u, " ", "    ")
-	fatalIf(probe.NewError(e), "Unable to marshal into JSON.")
-
-	return string(statusJSONBytes)
-}
-
 // checkAdminInfoSyntax - validate arguments passed by a user
-func checkAdminOBDSyntax(ctx *cli.Context) {
+func checkAdminHealthSyntax(ctx *cli.Context) {
 	if len(ctx.Args()) == 0 || len(ctx.Args()) > 1 {
 		cli.ShowCommandHelpAndExit(ctx, "health", 1) // last argument is exit code
 	}
 }
 
 //compress and tar obd output
-func tarGZ(c clusterHealth, alias string) error {
+func tarGZ(c ReportInfo, alias string) error {
 	filename := fmt.Sprintf("%s-health_%s.json.gz", filepath.Clean(alias), time.Now().Format("20060102150405"))
 	f, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR, 0666)
 	if err != nil {
@@ -118,9 +97,9 @@ func tarGZ(c clusterHealth, alias string) error {
 
 	enc := gojson.NewEncoder(gzWriter)
 
-	header := madmin.HealthReportHeader{
-		Subnet: madmin.Health{
-			Health: madmin.Version{
+	header := HealthReportHeader{
+		Subnet: Health{
+			Health: SchemaVersion{
 				Version: "v1",
 			},
 		},
@@ -162,7 +141,7 @@ func warnText(s string) string {
 }
 
 func mainAdminOBD(ctx *cli.Context) error {
-	checkAdminOBDSyntax(ctx)
+	checkAdminHealthSyntax(ctx)
 
 	// Get the alias parameter from cli
 	args := ctx.Args()
@@ -172,6 +151,23 @@ func mainAdminOBD(ctx *cli.Context) error {
 	client, err := newAdminClient(aliasedURL)
 	fatalIf(err, "Unable to initialize admin connection.")
 
+	healthInfo, e := fetchServerHealthInfo(ctx, client)
+	clusterHealthInfo := ClusterHealthV1{}.mapHealthInfo(healthInfo, e)
+
+	if globalJSON {
+		printMsg(clusterHealthInfo)
+		return nil
+	}
+
+	if clusterHealthInfo.getError() != "" {
+		console.Println(warnText("unable to obtain health information:"), clusterHealthInfo.getError())
+		return nil
+	}
+
+	return tarGZ(clusterHealthInfo, aliasedURL)
+}
+
+func fetchServerHealthInfo(ctx *cli.Context, client *madmin.AdminClient) (madmin.HealthInfo, error) {
 	opts := GetOBDDataTypeSlice(ctx, "test")
 	if len(*opts) == 0 {
 		opts = &options
@@ -229,7 +225,6 @@ func mainAdminOBD(ctx *cli.Context) error {
 			}
 		}
 	}
-
 	spinner := func(resource string, opt madmin.OBDDataType) func(bool) bool {
 		var spinStopper func()
 		done := false
@@ -256,8 +251,6 @@ func mainAdminOBD(ctx *cli.Context) error {
 		}
 	}
 
-	clusterOBDInfo := clusterHealth{}
-
 	admin := spinner("Admin Info", madmin.OBDDataTypeMinioInfo)
 	cpu := spinner("CPU Info", madmin.OBDDataTypeSysCPU)
 	diskHw := spinner("Disk Info", madmin.OBDDataTypeSysDiskHw)
@@ -280,158 +273,24 @@ func mainAdminOBD(ctx *cli.Context) error {
 			net(len(info.Perf.Net) > 1 && len(info.Perf.NetParallel.Addr) > 0)
 	}
 
-	healthInfo := madmin.HealthInfo{}
+	var err error
+	var healthInfo madmin.HealthInfo
 
 	// Fetch info of all servers (cluster or single server)
 	obdChan := client.ServerHealthInfo(cont, *opts, ctx.Duration("deadline"))
 	for adminHealthInfo := range obdChan {
 		if adminHealthInfo.Error != "" {
-			clusterOBDInfo.Status = "Error"
-			clusterOBDInfo.Error = adminHealthInfo.Error
+			err = errors.New(adminHealthInfo.Error)
 			break
 		}
 
-		clusterOBDInfo.Status = "Success"
 		healthInfo = adminHealthInfo
 		progress(adminHealthInfo)
 	}
 
 	// cancel the context if obdChan has returned.
 	cancel()
-
-	hw := madmin.HealthInfoHwV1{Servers: []madmin.HwServerV1{}}
-
-	serverAddrs := set.NewStringSet()
-
-	// Map CPU info
-	serverCPUs := map[string][]madmin.HwCPUV1{}
-	for _, ci := range healthInfo.Sys.CPUInfo {
-		cpus, ok := serverCPUs[ci.Addr]
-		if !ok {
-			cpus = []madmin.HwCPUV1{}
-		}
-		cpus = append(cpus, madmin.HwCPUV1{
-			CPUStat:   ci.CPUStat,
-			TimesStat: ci.TimeStat,
-			Error:     ci.Error,
-		})
-		serverCPUs[ci.Addr] = cpus
-	}
-
-	// Map memory info
-	serverMems := map[string][]madmin.HwMemV1{}
-	for _, mi := range healthInfo.Sys.MemInfo {
-		mems, ok := serverMems[mi.Addr]
-		if !ok {
-			mems = []madmin.HwMemV1{}
-		}
-		mems = append(mems, madmin.HwMemV1{
-			SwapMem:    mi.SwapMem,
-			VirtualMem: mi.VirtualMem,
-			Error:      mi.Error,
-		})
-		serverMems[mi.Addr] = mems
-	}
-
-	// Map network info
-	serverNetPerfSerial := map[string][]madmin.NetPerfInfo{}
-
-	for _, serverPerf := range healthInfo.Perf.Net {
-		serverNetPerfSerial[serverPerf.Addr] = serverPerf.Net
-	}
-
-	serverNetPerfParallel := map[string][]madmin.NetPerfInfo{}
-	serverNetPerfParallel[healthInfo.Perf.NetParallel.Addr] = healthInfo.Perf.NetParallel.Net
-
-	serverNetworks := map[string][]madmin.HwNetworkV1{}
-	for _, srvr := range healthInfo.Minio.Info.Servers {
-		for addr, status := range srvr.Network {
-			nets, ok := serverNetworks[srvr.Endpoint]
-			if !ok {
-				nets = []madmin.HwNetworkV1{}
-			}
-
-			nets = append(nets, madmin.HwNetworkV1{
-				Addr:   addr,
-				Status: status,
-			})
-			serverNetworks[srvr.Endpoint] = nets
-		}
-
-	}
-
-	serverDrivePerf := map[string]madmin.HwDrivePerfV1{}
-	for _, drivePerf := range healthInfo.Perf.DriveInfo {
-		dp := madmin.HwDrivePerfV1{
-			Serial:   drivePerf.Serial,
-			Parallel: drivePerf.Parallel,
-			Error:    drivePerf.Error,
-		}
-		serverDrivePerf[drivePerf.Addr] = dp
-	}
-
-	for addr := range serverCPUs {
-		serverAddrs.Add(addr)
-	}
-
-	for addr := range serverMems {
-		serverAddrs.Add(addr)
-	}
-
-	for addr := range serverNetworks {
-		serverAddrs.Add(addr)
-	}
-
-	for addr := range serverNetPerfSerial {
-		serverAddrs.Add(addr)
-	}
-
-	serverAddrs.Add(healthInfo.Perf.NetParallel.Addr)
-
-	for addr := range serverDrivePerf {
-		serverAddrs.Add(addr)
-	}
-
-	// Merge all hw info into servers
-	for addr := range serverAddrs {
-		perf := madmin.HwPerfV1{
-			Net: madmin.HwNetPerfV1{
-				Serial:   serverNetPerfSerial[addr],
-				Parallel: serverNetPerfParallel[addr],
-			},
-			Drive: serverDrivePerf[addr],
-		}
-		hw.Servers = append(hw.Servers, madmin.HwServerV1{
-			Addr:    addr,
-			CPUs:    serverCPUs[addr],
-			MemInfo: serverMems[addr],
-			Network: serverNetworks[addr],
-			Perf:    perf,
-		})
-	}
-
-	clusterOBDInfo.Hardware = hw
-	clusterOBDInfo.Software = madmin.HealthInfoSwV1{
-		Minio: madmin.MinioHealthInfoV1{
-			Info:     healthInfo.Minio.Info,
-			Config:   healthInfo.Minio.Config,
-			Error:    healthInfo.Minio.Error,
-			ProcInfo: healthInfo.Sys.ProcInfo,
-		},
-		OsInfo: healthInfo.Sys.OsInfo,
-	}
-
-	if globalJSON {
-		printMsg(clusterOBDInfo)
-		return nil
-	}
-
-	if clusterOBDInfo.Error != "" {
-		console.Println(warnText("unable to obtain health information:"), clusterOBDInfo.Error)
-		return nil
-	}
-
-	return tarGZ(clusterOBDInfo, aliasedURL)
+	return healthInfo, err
 }
 
 // OBDDataTypeSlice is a typed list of OBD tests
