@@ -76,8 +76,8 @@ type HwDrivePerfV1 struct {
 
 // SwInfoV1 - software health Info
 type SwInfoV1 struct {
-	Minio  MinioHealthInfoV1           `json:"minio,omitempty"`
-	OsInfo []madmin.ServerOsHealthInfo `json:"osinfos,omitempty"`
+	Minio  MinioHealthInfoV1     `json:"minio,omitempty"`
+	OsInfo []madmin.ServerOsInfo `json:"osinfos,omitempty"`
 }
 
 // MinioHealthInfoV1 - Health info of the MinIO cluster

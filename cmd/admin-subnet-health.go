@@ -36,7 +36,7 @@ import (
 )
 
 var adminOBDFlags = []cli.Flag{
-	OBDDataTypeFlag{
+	HealthDataTypeFlag{
 		Name:   "test",
 		Usage:  "choose OBD tests to run [" + options.String() + "]",
 		Value:  nil,
@@ -168,12 +168,12 @@ func mainAdminOBD(ctx *cli.Context) error {
 }
 
 func fetchServerHealthInfo(ctx *cli.Context, client *madmin.AdminClient) (madmin.HealthInfo, error) {
-	opts := GetOBDDataTypeSlice(ctx, "test")
+	opts := GetHealthDataTypeSlice(ctx, "test")
 	if len(*opts) == 0 {
 		opts = &options
 	}
 
-	optsMap := make(map[madmin.OBDDataType]struct{})
+	optsMap := make(map[madmin.HealthDataType]struct{})
 	for _, opt := range *opts {
 		optsMap[opt] = struct{}{}
 	}
@@ -225,7 +225,7 @@ func fetchServerHealthInfo(ctx *cli.Context, client *madmin.AdminClient) (madmin
 			}
 		}
 	}
-	spinner := func(resource string, opt madmin.OBDDataType) func(bool) bool {
+	spinner := func(resource string, opt madmin.HealthDataType) func(bool) bool {
 		var spinStopper func()
 		done := false
 
@@ -251,15 +251,15 @@ func fetchServerHealthInfo(ctx *cli.Context, client *madmin.AdminClient) (madmin
 		}
 	}
 
-	admin := spinner("Admin Info", madmin.OBDDataTypeMinioInfo)
-	cpu := spinner("CPU Info", madmin.OBDDataTypeSysCPU)
-	diskHw := spinner("Disk Info", madmin.OBDDataTypeSysDiskHw)
-	osInfo := spinner("OS Info", madmin.OBDDataTypeSysOsInfo)
-	mem := spinner("Mem Info", madmin.OBDDataTypeSysMem)
-	process := spinner("Process Info", madmin.OBDDataTypeSysLoad)
-	config := spinner("Server Config", madmin.OBDDataTypeMinioConfig)
-	drive := spinner("Drive Test", madmin.OBDDataTypePerfDrive)
-	net := spinner("Network Test", madmin.OBDDataTypePerfNet)
+	admin := spinner("Admin Info", madmin.HealthDataTypeMinioInfo)
+	cpu := spinner("CPU Info", madmin.HealthDataTypeSysCPU)
+	diskHw := spinner("Disk Info", madmin.HealthDataTypeSysDiskHw)
+	osInfo := spinner("OS Info", madmin.HealthDataTypeSysOsInfo)
+	mem := spinner("Mem Info", madmin.HealthDataTypeSysMem)
+	process := spinner("Process Info", madmin.HealthDataTypeSysLoad)
+	config := spinner("Server Config", madmin.HealthDataTypeMinioConfig)
+	drive := spinner("Drive Test", madmin.HealthDataTypePerfDrive)
+	net := spinner("Network Test", madmin.HealthDataTypePerfNet)
 
 	progress := func(info madmin.HealthInfo) {
 		_ = admin(len(info.Minio.Info.Servers) > 0) &&
@@ -293,13 +293,13 @@ func fetchServerHealthInfo(ctx *cli.Context, client *madmin.AdminClient) (madmin
 	return healthInfo, err
 }
 
-// OBDDataTypeSlice is a typed list of OBD tests
-type OBDDataTypeSlice []madmin.OBDDataType
+// HealthDataTypeSlice is a typed list of OBD tests
+type HealthDataTypeSlice []madmin.HealthDataType
 
 // Set - sets the flag to the given value
-func (d *OBDDataTypeSlice) Set(value string) error {
+func (d *HealthDataTypeSlice) Set(value string) error {
 	for _, v := range strings.Split(value, ",") {
-		if obdData, ok := madmin.OBDDataTypesMap[strings.Trim(v, " ")]; ok {
+		if obdData, ok := madmin.HealthDataTypesMap[strings.Trim(v, " ")]; ok {
 			*d = append(*d, obdData)
 		} else {
 			return fmt.Errorf("valid options include %s", options.String())
@@ -309,7 +309,7 @@ func (d *OBDDataTypeSlice) Set(value string) error {
 }
 
 // String - returns the string representation of the OBD datatypes
-func (d *OBDDataTypeSlice) String() string {
+func (d *HealthDataTypeSlice) String() string {
 	val := ""
 	for _, obdData := range *d {
 		formatStr := "%s"
@@ -324,64 +324,64 @@ func (d *OBDDataTypeSlice) String() string {
 }
 
 // Value - returns the value
-func (d *OBDDataTypeSlice) Value() []madmin.OBDDataType {
+func (d *HealthDataTypeSlice) Value() []madmin.HealthDataType {
 	return *d
 }
 
 // Get - returns the value
-func (d *OBDDataTypeSlice) Get() interface{} {
+func (d *HealthDataTypeSlice) Get() interface{} {
 	return *d
 }
 
-// OBDDataTypeFlag is a typed flag to represent OBD datatypes
-type OBDDataTypeFlag struct {
+// HealthDataTypeFlag is a typed flag to represent OBD datatypes
+type HealthDataTypeFlag struct {
 	Name   string
 	Usage  string
 	EnvVar string
 	Hidden bool
-	Value  *OBDDataTypeSlice
+	Value  *HealthDataTypeSlice
 }
 
 // String - returns the string to be shown in the help message
-func (f OBDDataTypeFlag) String() string {
+func (f HealthDataTypeFlag) String() string {
 	return fmt.Sprintf("--%s                       %s", f.Name, f.Usage)
 }
 
 // GetName - returns the name of the flag
-func (f OBDDataTypeFlag) GetName() string {
+func (f HealthDataTypeFlag) GetName() string {
 	return f.Name
 }
 
-// GetOBDDataTypeSlice - returns the list of set OBD tests
-func GetOBDDataTypeSlice(c *cli.Context, name string) *OBDDataTypeSlice {
+// GetHealthDataTypeSlice - returns the list of set OBD tests
+func GetHealthDataTypeSlice(c *cli.Context, name string) *HealthDataTypeSlice {
 	generic := c.Generic(name)
 	if generic == nil {
 		return nil
 	}
-	return generic.(*OBDDataTypeSlice)
+	return generic.(*HealthDataTypeSlice)
 }
 
-// GetGlobalOBDDataTypeSlice - returns the list of set OBD tests set globally
-func GetGlobalOBDDataTypeSlice(c *cli.Context, name string) *OBDDataTypeSlice {
+// GetGlobalHealthDataTypeSlice - returns the list of set OBD tests set globally
+func GetGlobalHealthDataTypeSlice(c *cli.Context, name string) *HealthDataTypeSlice {
 	generic := c.GlobalGeneric(name)
 	if generic == nil {
 		return nil
 	}
-	return generic.(*OBDDataTypeSlice)
+	return generic.(*HealthDataTypeSlice)
 }
 
 // Apply - applies the flag
-func (f OBDDataTypeFlag) Apply(set *flag.FlagSet) {
+func (f HealthDataTypeFlag) Apply(set *flag.FlagSet) {
 	f.ApplyWithError(set)
 }
 
 // ApplyWithError - applies with error
-func (f OBDDataTypeFlag) ApplyWithError(set *flag.FlagSet) error {
+func (f HealthDataTypeFlag) ApplyWithError(set *flag.FlagSet) error {
 	if f.EnvVar != "" {
 		for _, envVar := range strings.Split(f.EnvVar, ",") {
 			envVar = strings.TrimSpace(envVar)
 			if envVal, ok := syscall.Getenv(envVar); ok {
-				newVal := &OBDDataTypeSlice{}
+				newVal := &HealthDataTypeSlice{}
 				for _, s := range strings.Split(envVal, ",") {
 					s = strings.TrimSpace(s)
 					if err := newVal.Set(s); err != nil {
@@ -397,11 +397,11 @@ func (f OBDDataTypeFlag) ApplyWithError(set *flag.FlagSet) error {
 	for _, name := range strings.Split(f.Name, ",") {
 		name = strings.Trim(name, " ")
 		if f.Value == nil {
-			f.Value = &OBDDataTypeSlice{}
+			f.Value = &HealthDataTypeSlice{}
 		}
 		set.Var(f.Value, name, f.Usage)
 	}
 	return nil
 }
 
-var options = OBDDataTypeSlice(madmin.OBDDataTypesList)
+var options = HealthDataTypeSlice(madmin.HealthDataTypesList)
