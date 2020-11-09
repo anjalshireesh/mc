@@ -152,15 +152,15 @@ func mainAdminOBD(ctx *cli.Context) error {
 	fatalIf(err, "Unable to initialize admin connection.")
 
 	healthInfo, e := fetchServerHealthInfo(ctx, client)
-	clusterHealthInfo := ClusterHealthV1{}.mapHealthInfo(healthInfo, e)
+	clusterHealthInfo := mapHealthInfo(healthInfo, e)
 
 	if globalJSON {
 		printMsg(clusterHealthInfo)
 		return nil
 	}
 
-	if clusterHealthInfo.getError() != "" {
-		console.Println(warnText("unable to obtain health information:"), clusterHealthInfo.getError())
+	if clusterHealthInfo.GetError() != "" {
+		console.Println(warnText("unable to obtain health information:"), clusterHealthInfo.GetError())
 		return nil
 	}
 

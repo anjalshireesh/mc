@@ -17,14 +17,14 @@
 
 package cmd
 
-import "github.com/minio/minio/pkg/madmin"
+import "time"
 
 // ReportInfo - interface to be implemented by health report schema struct
 type ReportInfo interface {
-	getStatus() string
-	getError() string
+	GetTimestamp() time.Time
+	GetStatus() string
+	GetError() string
 	message
-	mapHealthInfo(healthInfo madmin.HealthInfo, err error) ReportInfo
 }
 
 // HealthReportHeader - Header of the subnet health report

@@ -20,6 +20,7 @@ package cmd
 import (
 	"encoding/json"
 	"reflect"
+	"time"
 
 	"github.com/minio/mc/pkg/probe"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -90,10 +91,11 @@ type MinioHealthInfoV1 struct {
 
 // ClusterHealthV1 - main struct of the health report
 type ClusterHealthV1 struct {
-	Status   string      `json:"status"`
-	Error    string      `json:"error,omitempty"`
-	Hardware HwServersV1 `json:"hardware,omitempty"`
-	Software SwInfoV1    `json:"software,omitempty"`
+	TimeStamp time.Time   `json:"timestamp,omitempty"`
+	Status    string      `json:"status"`
+	Error     string      `json:"error,omitempty"`
+	Hardware  HwServersV1 `json:"hardware,omitempty"`
+	Software  SwInfoV1    `json:"software,omitempty"`
 }
 
 func (ch ClusterHealthV1) String() string {
@@ -108,15 +110,24 @@ func (ch ClusterHealthV1) JSON() string {
 	return string(statusJSONBytes)
 }
 
-func (ch ClusterHealthV1) getStatus() string {
+// GetStatus - return status of the health info
+func (ch ClusterHealthV1) GetStatus() string {
 	return ch.Status
 }
 
-func (ch ClusterHealthV1) getError() string {
+// GetError - return error from the health info
+func (ch ClusterHealthV1) GetError() string {
 	return ch.Error
 }
 
-func (ch ClusterHealthV1) mapHealthInfo(healthInfo madmin.HealthInfo, err error) ReportInfo {
+// GetTimestamp - return timestamp from the health info
+func (ch ClusterHealthV1) GetTimestamp() time.Time {
+	return ch.TimeStamp
+}
+
+func mapHealthInfo(healthInfo madmin.HealthInfo, err error) ReportInfo {
+	ch := ClusterHealthV1{}
+	ch.TimeStamp = healthInfo.TimeStamp
 	if err != nil {
 		ch.Status = "Error"
 		ch.Error = err.Error()
