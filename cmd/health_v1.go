@@ -64,29 +64,29 @@ type HwPerfV1 struct {
 
 // HwNetPerfV1 - Network performance info
 type HwNetPerfV1 struct {
-	Serial   []madmin.NetPerfInfo `json:"serial,omitempty"`
-	Parallel []madmin.NetPerfInfo `json:"parallel,omitempty"`
+	Serial   []madmin.NetOBDInfo `json:"serial,omitempty"`
+	Parallel []madmin.NetOBDInfo `json:"parallel,omitempty"`
 }
 
 // HwDrivePerfV1 - Network performance info
 type HwDrivePerfV1 struct {
-	Serial   []madmin.DrivePerfInfo `json:"serial,omitempty"`
-	Parallel []madmin.DrivePerfInfo `json:"parallel,omitempty"`
-	Error    string                 `json:"error,omitempty"`
+	Serial   []madmin.DriveOBDInfo `json:"serial,omitempty"`
+	Parallel []madmin.DriveOBDInfo `json:"parallel,omitempty"`
+	Error    string                `json:"error,omitempty"`
 }
 
 // SwInfoV1 - software health Info
 type SwInfoV1 struct {
-	Minio  MinioHealthInfoV1     `json:"minio,omitempty"`
-	OsInfo []madmin.ServerOsInfo `json:"osinfos,omitempty"`
+	Minio  MinioHealthInfoV1        `json:"minio,omitempty"`
+	OsInfo []madmin.ServerOsOBDInfo `json:"osinfos,omitempty"`
 }
 
 // MinioHealthInfoV1 - Health info of the MinIO cluster
 type MinioHealthInfoV1 struct {
-	Info     madmin.InfoMessage      `json:"info,omitempty"`
-	Config   interface{}             `json:"config,omitempty"`
-	ProcInfo []madmin.ServerProcInfo `json:"procinfos,omitempty"`
-	Error    string                  `json:"error,omitempty"`
+	Info     madmin.InfoMessage         `json:"info,omitempty"`
+	Config   interface{}                `json:"config,omitempty"`
+	ProcInfo []madmin.ServerProcOBDInfo `json:"procinfos,omitempty"`
+	Error    string                     `json:"error,omitempty"`
 }
 
 // ClusterHealthV1 - main struct of the health report
@@ -125,7 +125,7 @@ func (ch ClusterHealthV1) GetTimestamp() time.Time {
 	return ch.TimeStamp
 }
 
-func mapHealthInfo(healthInfo madmin.HealthInfo, err error) ReportInfo {
+func mapHealthInfo(healthInfo madmin.OBDInfo, err error) ReportInfo {
 	ch := ClusterHealthV1{}
 	ch.TimeStamp = healthInfo.TimeStamp
 	if err != nil {
@@ -187,7 +187,7 @@ func addKeysToSet(input []reflect.Value, output *set.StringSet) {
 	}
 }
 
-func mapServerCPUs(healthInfo madmin.HealthInfo) map[string][]HwCPUV1 {
+func mapServerCPUs(healthInfo madmin.OBDInfo) map[string][]HwCPUV1 {
 	serverCPUs := map[string][]HwCPUV1{}
 	for _, ci := range healthInfo.Sys.CPUInfo {
 		cpus, ok := serverCPUs[ci.Addr]
@@ -204,7 +204,7 @@ func mapServerCPUs(healthInfo madmin.HealthInfo) map[string][]HwCPUV1 {
 	return serverCPUs
 }
 
-func mapServerMems(healthInfo madmin.HealthInfo) map[string][]HwMemV1 {
+func mapServerMems(healthInfo madmin.OBDInfo) map[string][]HwMemV1 {
 	serverMems := map[string][]HwMemV1{}
 	for _, mi := range healthInfo.Sys.MemInfo {
 		mems, ok := serverMems[mi.Addr]
@@ -221,19 +221,19 @@ func mapServerMems(healthInfo madmin.HealthInfo) map[string][]HwMemV1 {
 	return serverMems
 }
 
-func mapServerNetPerf(healthInfo madmin.HealthInfo) (map[string][]madmin.NetPerfInfo, map[string][]madmin.NetPerfInfo) {
-	snpSerial := map[string][]madmin.NetPerfInfo{}
+func mapServerNetPerf(healthInfo madmin.OBDInfo) (map[string][]madmin.NetOBDInfo, map[string][]madmin.NetOBDInfo) {
+	snpSerial := map[string][]madmin.NetOBDInfo{}
 	for _, serverPerf := range healthInfo.Perf.Net {
 		snpSerial[serverPerf.Addr] = serverPerf.Net
 	}
 
-	snpParallel := map[string][]madmin.NetPerfInfo{}
+	snpParallel := map[string][]madmin.NetOBDInfo{}
 	snpParallel[healthInfo.Perf.NetParallel.Addr] = healthInfo.Perf.NetParallel.Net
 
 	return snpSerial, snpParallel
 }
 
-func mapServerDrivePerf(healthInfo madmin.HealthInfo) map[string]HwDrivePerfV1 {
+func mapServerDrivePerf(healthInfo madmin.OBDInfo) map[string]HwDrivePerfV1 {
 	sdp := map[string]HwDrivePerfV1{}
 	for _, drivePerf := range healthInfo.Perf.DriveInfo {
 		sdp[drivePerf.Addr] = HwDrivePerfV1{

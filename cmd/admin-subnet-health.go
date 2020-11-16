@@ -167,13 +167,13 @@ func mainAdminOBD(ctx *cli.Context) error {
 	return tarGZ(clusterHealthInfo, aliasedURL)
 }
 
-func fetchServerHealthInfo(ctx *cli.Context, client *madmin.AdminClient) (madmin.HealthInfo, error) {
+func fetchServerHealthInfo(ctx *cli.Context, client *madmin.AdminClient) (madmin.OBDInfo, error) {
 	opts := GetHealthDataTypeSlice(ctx, "test")
 	if len(*opts) == 0 {
 		opts = &options
 	}
 
-	optsMap := make(map[madmin.HealthDataType]struct{})
+	optsMap := make(map[madmin.OBDDataType]struct{})
 	for _, opt := range *opts {
 		optsMap[opt] = struct{}{}
 	}
@@ -225,7 +225,7 @@ func fetchServerHealthInfo(ctx *cli.Context, client *madmin.AdminClient) (madmin
 			}
 		}
 	}
-	spinner := func(resource string, opt madmin.HealthDataType) func(bool) bool {
+	spinner := func(resource string, opt madmin.OBDDataType) func(bool) bool {
 		var spinStopper func()
 		done := false
 
@@ -251,17 +251,17 @@ func fetchServerHealthInfo(ctx *cli.Context, client *madmin.AdminClient) (madmin
 		}
 	}
 
-	admin := spinner("Admin Info", madmin.HealthDataTypeMinioInfo)
-	cpu := spinner("CPU Info", madmin.HealthDataTypeSysCPU)
-	diskHw := spinner("Disk Info", madmin.HealthDataTypeSysDiskHw)
-	osInfo := spinner("OS Info", madmin.HealthDataTypeSysOsInfo)
-	mem := spinner("Mem Info", madmin.HealthDataTypeSysMem)
-	process := spinner("Process Info", madmin.HealthDataTypeSysLoad)
-	config := spinner("Server Config", madmin.HealthDataTypeMinioConfig)
-	drive := spinner("Drive Test", madmin.HealthDataTypePerfDrive)
-	net := spinner("Network Test", madmin.HealthDataTypePerfNet)
+	admin := spinner("Admin Info", madmin.OBDDataTypeMinioInfo)
+	cpu := spinner("CPU Info", madmin.OBDDataTypeSysCPU)
+	diskHw := spinner("Disk Info", madmin.OBDDataTypeSysDiskHw)
+	osInfo := spinner("OS Info", madmin.OBDDataTypeSysOsInfo)
+	mem := spinner("Mem Info", madmin.OBDDataTypeSysMem)
+	process := spinner("Process Info", madmin.OBDDataTypeSysLoad)
+	config := spinner("Server Config", madmin.OBDDataTypeMinioConfig)
+	drive := spinner("Drive Test", madmin.OBDDataTypePerfDrive)
+	net := spinner("Network Test", madmin.OBDDataTypePerfNet)
 
-	progress := func(info madmin.HealthInfo) {
+	progress := func(info madmin.OBDInfo) {
 		_ = admin(len(info.Minio.Info.Servers) > 0) &&
 			cpu(len(info.Sys.CPUInfo) > 0) &&
 			diskHw(len(info.Sys.DiskHwInfo) > 0) &&
@@ -274,10 +274,10 @@ func fetchServerHealthInfo(ctx *cli.Context, client *madmin.AdminClient) (madmin
 	}
 
 	var err error
-	var healthInfo madmin.HealthInfo
+	var healthInfo madmin.OBDInfo
 
 	// Fetch info of all servers (cluster or single server)
-	obdChan := client.ServerHealthInfo(cont, *opts, ctx.Duration("deadline"))
+	obdChan := client.ServerOBDInfo(cont, *opts, ctx.Duration("deadline"))
 	for adminHealthInfo := range obdChan {
 		if adminHealthInfo.Error != "" {
 			err = errors.New(adminHealthInfo.Error)
@@ -294,12 +294,12 @@ func fetchServerHealthInfo(ctx *cli.Context, client *madmin.AdminClient) (madmin
 }
 
 // HealthDataTypeSlice is a typed list of OBD tests
-type HealthDataTypeSlice []madmin.HealthDataType
+type HealthDataTypeSlice []madmin.OBDDataType
 
 // Set - sets the flag to the given value
 func (d *HealthDataTypeSlice) Set(value string) error {
 	for _, v := range strings.Split(value, ",") {
-		if obdData, ok := madmin.HealthDataTypesMap[strings.Trim(v, " ")]; ok {
+		if obdData, ok := madmin.OBDDataTypesMap[strings.Trim(v, " ")]; ok {
 			*d = append(*d, obdData)
 		} else {
 			return fmt.Errorf("valid options include %s", options.String())
@@ -324,7 +324,7 @@ func (d *HealthDataTypeSlice) String() string {
 }
 
 // Value - returns the value
-func (d *HealthDataTypeSlice) Value() []madmin.HealthDataType {
+func (d *HealthDataTypeSlice) Value() []madmin.OBDDataType {
 	return *d
 }
 
@@ -404,4 +404,4 @@ func (f HealthDataTypeFlag) ApplyWithError(set *flag.FlagSet) error {
 	return nil
 }
 
-var options = HealthDataTypeSlice(madmin.HealthDataTypesList)
+var options = HealthDataTypeSlice(madmin.OBDDataTypesList)
