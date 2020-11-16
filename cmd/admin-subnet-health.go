@@ -80,7 +80,7 @@ func checkAdminHealthSyntax(ctx *cli.Context) {
 }
 
 //compress and tar obd output
-func tarGZ(c ReportInfo, alias string) error {
+func tarGZ(c HealthReportInfo, alias string) error {
 	filename := fmt.Sprintf("%s-health_%s.json.gz", filepath.Clean(alias), time.Now().Format("20060102150405"))
 	f, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR, 0666)
 	if err != nil {

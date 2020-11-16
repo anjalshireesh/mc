@@ -19,8 +19,8 @@ package cmd
 
 import "time"
 
-// ReportInfo - interface to be implemented by health report schema struct
-type ReportInfo interface {
+// HealthReportInfo - interface to be implemented by health report schema struct
+type HealthReportInfo interface {
 	GetTimestamp() time.Time
 	GetStatus() string
 	GetError() string

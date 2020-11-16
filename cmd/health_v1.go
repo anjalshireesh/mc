@@ -125,7 +125,7 @@ func (ch ClusterHealthV1) GetTimestamp() time.Time {
 	return ch.TimeStamp
 }
 
-func mapHealthInfo(healthInfo madmin.OBDInfo, err error) ReportInfo {
+func mapHealthInfo(healthInfo madmin.OBDInfo, err error) HealthReportInfo {
 	ch := ClusterHealthV1{}
 	ch.TimeStamp = healthInfo.TimeStamp
 	if err != nil {
