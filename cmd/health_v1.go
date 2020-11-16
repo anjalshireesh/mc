@@ -131,10 +131,10 @@ func mapHealthInfo(healthInfo madmin.OBDInfo, err error) HealthReportInfo {
 	if err != nil {
 		ch.Status = "Error"
 		ch.Error = err.Error()
-		// TODO: Should we return here? Compare with original code
-	} else {
-		ch.Status = "Success"
+		return ch
 	}
+
+	ch.Status = "Success"
 
 	serverAddrs := set.NewStringSet()
 

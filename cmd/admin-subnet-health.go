@@ -35,17 +35,17 @@ import (
 	"github.com/minio/minio/pkg/madmin"
 )
 
-var adminOBDFlags = []cli.Flag{
+var adminHealthFlags = []cli.Flag{
 	HealthDataTypeFlag{
 		Name:   "test",
-		Usage:  "choose OBD tests to run [" + options.String() + "]",
+		Usage:  "choose health tests to run [" + options.String() + "]",
 		Value:  nil,
 		EnvVar: "MC_HEALTH_TEST,MC_OBD_TEST",
 		Hidden: true,
 	},
 	cli.DurationFlag{
 		Name:   "deadline",
-		Usage:  "maximum duration that OBD tests should be allowed to run",
+		Usage:  "maximum duration that health tests should be allowed to run",
 		Value:  3600 * time.Second,
 		EnvVar: "MC_HEALTH_DEADLINE,MC_OBD_DEADLINE",
 	},
@@ -54,9 +54,9 @@ var adminOBDFlags = []cli.Flag{
 var adminSubnetHealthCmd = cli.Command{
 	Name:   "health",
 	Usage:  "run health check for Subnet",
-	Action: mainAdminOBD,
+	Action: mainAdminHealth,
 	Before: setGlobalsFromContext,
-	Flags:  append(adminOBDFlags, globalFlags...),
+	Flags:  append(adminHealthFlags, globalFlags...),
 	CustomHelpTemplate: `NAME:
   {{.HelpName}} - {{.Usage}}
 
@@ -140,7 +140,7 @@ func warnText(s string) string {
 	return console.Colorize("WARN", s)
 }
 
-func mainAdminOBD(ctx *cli.Context) error {
+func mainAdminHealth(ctx *cli.Context) error {
 	checkAdminHealthSyntax(ctx)
 
 	// Get the alias parameter from cli
@@ -293,7 +293,7 @@ func fetchServerHealthInfo(ctx *cli.Context, client *madmin.AdminClient) (madmin
 	return healthInfo, err
 }
 
-// HealthDataTypeSlice is a typed list of OBD tests
+// HealthDataTypeSlice is a typed list of health tests
 type HealthDataTypeSlice []madmin.OBDDataType
 
 // Set - sets the flag to the given value
@@ -308,7 +308,7 @@ func (d *HealthDataTypeSlice) Set(value string) error {
 	return nil
 }
 
-// String - returns the string representation of the OBD datatypes
+// String - returns the string representation of the health datatypes
 func (d *HealthDataTypeSlice) String() string {
 	val := ""
 	for _, obdData := range *d {
@@ -333,7 +333,7 @@ func (d *HealthDataTypeSlice) Get() interface{} {
 	return *d
 }
 
-// HealthDataTypeFlag is a typed flag to represent OBD datatypes
+// HealthDataTypeFlag is a typed flag to represent health datatypes
 type HealthDataTypeFlag struct {
 	Name   string
 	Usage  string
@@ -352,7 +352,7 @@ func (f HealthDataTypeFlag) GetName() string {
 	return f.Name
 }
 
-// GetHealthDataTypeSlice - returns the list of set OBD tests
+// GetHealthDataTypeSlice - returns the list of set health tests
 func GetHealthDataTypeSlice(c *cli.Context, name string) *HealthDataTypeSlice {
 	generic := c.Generic(name)
 	if generic == nil {
@@ -361,7 +361,7 @@ func GetHealthDataTypeSlice(c *cli.Context, name string) *HealthDataTypeSlice {
 	return generic.(*HealthDataTypeSlice)
 }
 
-// GetGlobalHealthDataTypeSlice - returns the list of set OBD tests set globally
+// GetGlobalHealthDataTypeSlice - returns the list of set health tests set globally
 func GetGlobalHealthDataTypeSlice(c *cli.Context, name string) *HealthDataTypeSlice {
 	generic := c.GlobalGeneric(name)
 	if generic == nil {
@@ -385,7 +385,7 @@ func (f HealthDataTypeFlag) ApplyWithError(set *flag.FlagSet) error {
 				for _, s := range strings.Split(envVal, ",") {
 					s = strings.TrimSpace(s)
 					if err := newVal.Set(s); err != nil {
-						return fmt.Errorf("could not parse %s as OBD datatype value for flag %s: %s", envVal, f.Name, err)
+						return fmt.Errorf("could not parse %s as health datatype value for flag %s: %s", envVal, f.Name, err)
 					}
 				}
 				f.Value = newVal
