@@ -152,7 +152,7 @@ func mainAdminHealth(ctx *cli.Context) error {
 	fatalIf(err, "Unable to initialize admin connection.")
 
 	healthInfo, e := fetchServerHealthInfo(ctx, client)
-	clusterHealthInfo := mapHealthInfo(healthInfo, e)
+	clusterHealthInfo := MapHealthInfoToV1(healthInfo, e)
 
 	if globalJSON {
 		printMsg(clusterHealthInfo)

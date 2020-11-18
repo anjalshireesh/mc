@@ -38,7 +38,7 @@ type HwServersV1 struct {
 type HwServerV1 struct {
 	Addr    string    `json:"addr"`
 	CPUs    []HwCPUV1 `json:"cpus,omitempty"`
-	MemInfo []HwMemV1 `json:"meminfos,omitempty"`
+	MemInfo HwMemV1   `json:"meminfo,omitempty"`
 	Perf    HwPerfV1  `json:"perf,omitempty"`
 }
 
@@ -125,7 +125,8 @@ func (ch ClusterHealthV1) GetTimestamp() time.Time {
 	return ch.TimeStamp
 }
 
-func mapHealthInfo(healthInfo madmin.OBDInfo, err error) HealthReportInfo {
+// MapHealthInfoToV1 - Maps health info to V1 format
+func MapHealthInfoToV1(healthInfo madmin.OBDInfo, err error) HealthReportInfo {
 	ch := ClusterHealthV1{}
 	ch.TimeStamp = healthInfo.TimeStamp
 	if err != nil {
@@ -204,19 +205,14 @@ func mapServerCPUs(healthInfo madmin.OBDInfo) map[string][]HwCPUV1 {
 	return serverCPUs
 }
 
-func mapServerMems(healthInfo madmin.OBDInfo) map[string][]HwMemV1 {
-	serverMems := map[string][]HwMemV1{}
+func mapServerMems(healthInfo madmin.OBDInfo) map[string]HwMemV1 {
+	serverMems := map[string]HwMemV1{}
 	for _, mi := range healthInfo.Sys.MemInfo {
-		mems, ok := serverMems[mi.Addr]
-		if !ok {
-			mems = []HwMemV1{}
-		}
-		mems = append(mems, HwMemV1{
+		serverMems[mi.Addr] = HwMemV1{
 			SwapMem:    mi.SwapMem,
 			VirtualMem: mi.VirtualMem,
 			Error:      mi.Error,
-		})
-		serverMems[mi.Addr] = mems
+		}
 	}
 	return serverMems
 }
