@@ -26,6 +26,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/mem"
 )
 
@@ -36,10 +37,11 @@ type HwServersV1 struct {
 
 // HwServerV1 - server health Info
 type HwServerV1 struct {
-	Addr    string    `json:"addr"`
-	CPUs    []HwCPUV1 `json:"cpus,omitempty"`
-	MemInfo HwMemV1   `json:"meminfo,omitempty"`
-	Perf    HwPerfV1  `json:"perf,omitempty"`
+	Addr    string      `json:"addr"`
+	CPUs    []HwCPUV1   `json:"cpus,omitempty"`
+	Drives  []HwDriveV1 `json:"drives,omitempty"`
+	MemInfo HwMemV1     `json:"meminfo,omitempty"`
+	Perf    HwPerfV1    `json:"perf,omitempty"`
 }
 
 // HwCPUV1 - CPU Info
@@ -47,6 +49,14 @@ type HwCPUV1 struct {
 	CPUStat   []cpu.InfoStat  `json:"cpu,omitempty"`
 	TimesStat []cpu.TimesStat `json:"time,omitempty"`
 	Error     string          `json:"error,omitempty"`
+}
+
+// HwDriveV1 - Drive info
+type HwDriveV1 struct {
+	Counters   map[string]disk.IOCountersStat `json:"counters,omitempty"`
+	Partitions []madmin.PartitionStat         `json:"partitions,omitempty"`
+	Usage      []*disk.UsageStat              `json:"usage,omitempty"`
+	Error      string                         `json:"error,omitempty"`
 }
 
 // HwMemV1 - Includes host virtual and swap mem information
@@ -140,11 +150,13 @@ func MapHealthInfoToV1(healthInfo madmin.OBDInfo, err error) HealthReportInfo {
 	serverAddrs := set.NewStringSet()
 
 	serverCPUs := mapServerCPUs(healthInfo)
+	serverDrives := mapServerDrives(healthInfo)
 	serverMems := mapServerMems(healthInfo)
 	serverNetPerfSerial, serverNetPerfParallel := mapServerNetPerf(healthInfo)
 	serverDrivePerf := mapServerDrivePerf(healthInfo)
 
 	addKeysToSet(reflect.ValueOf(serverCPUs).MapKeys(), &serverAddrs)
+	addKeysToSet(reflect.ValueOf(serverDrives).MapKeys(), &serverAddrs)
 	addKeysToSet(reflect.ValueOf(serverMems).MapKeys(), &serverAddrs)
 	addKeysToSet(reflect.ValueOf(serverNetPerfSerial).MapKeys(), &serverAddrs)
 	serverAddrs.Add(healthInfo.Perf.NetParallel.Addr)
@@ -163,6 +175,7 @@ func MapHealthInfoToV1(healthInfo madmin.OBDInfo, err error) HealthReportInfo {
 		hw.Servers = append(hw.Servers, HwServerV1{
 			Addr:    addr,
 			CPUs:    serverCPUs[addr],
+			Drives:  serverDrives[addr],
 			MemInfo: serverMems[addr],
 			Perf:    perf,
 		})
@@ -203,6 +216,24 @@ func mapServerCPUs(healthInfo madmin.OBDInfo) map[string][]HwCPUV1 {
 		serverCPUs[ci.Addr] = cpus
 	}
 	return serverCPUs
+}
+
+func mapServerDrives(healthInfo madmin.OBDInfo) map[string][]HwDriveV1 {
+	serverDrives := map[string][]HwDriveV1{}
+	for _, di := range healthInfo.Sys.DiskHwInfo {
+		drives, ok := serverDrives[di.Addr]
+		if !ok {
+			drives = []HwDriveV1{}
+		}
+		drives = append(drives, HwDriveV1{
+			Counters:   di.Counters,
+			Partitions: di.Partitions,
+			Usage:      di.Usage,
+			Error:      di.Error,
+		})
+		serverDrives[di.Addr] = drives
+	}
+	return serverDrives
 }
 
 func mapServerMems(healthInfo madmin.OBDInfo) map[string]HwMemV1 {
