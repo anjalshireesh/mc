@@ -15,7 +15,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.9 // indirect
 	github.com/minio/cli v1.22.0
 	github.com/minio/minio v0.0.0-20201102034248-d8e07f2c41c8
-	github.com/minio/minio-go/v7 v7.0.6-0.20200929220449-755b5633803a
+	github.com/minio/minio-go/v7 v7.0.6-0.20201118225257-f6869a5e2a6a
 	github.com/minio/sha256-simd v0.1.1
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
@@ -24,7 +24,7 @@ require (
 	github.com/posener/complete v1.2.3
 	github.com/rjeczalik/notify v0.9.2
 	github.com/rs/xid v1.2.1
-	github.com/shirou/gopsutil v2.20.3-0.20200314133625-53cec6b37e6a+incompatible
+	github.com/shirou/gopsutil v2.20.9+incompatible
 	golang.org/x/crypto v0.0.0-20201012173705-84dcc777aaee
 	golang.org/x/net v0.0.0-20201010224723-4f7140c49acb
 	golang.org/x/sys v0.0.0-20201013132646-2da7054afaeb // indirect
@@ -35,3 +35,5 @@ require (
 )
 
 replace go.etcd.io/etcd/v3 => go.etcd.io/etcd/v3 v3.3.0-rc.0.0.20200707003333-58bb8ae09f8e
+
+replace github.com/minio/minio => ../minio/
