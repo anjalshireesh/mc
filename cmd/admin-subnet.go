@@ -24,7 +24,7 @@ import (
 
 var subnetHealthSubcommands = []cli.Command{
 	adminSubnetHealthCmd,
-	adminSubnetRegisterCmd,
+	adminSubnetLoginCmd,
 }
 
 var adminSubnetCmd = cli.Command{

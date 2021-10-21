@@ -29,11 +29,11 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-var adminSubnetRegisterCmd = cli.Command{
-	Name:         "register",
-	Usage:        "Register the MinIO Cluster with SUBNET",
+var adminSubnetLoginCmd = cli.Command{
+	Name:         "login",
+	Usage:        "Log in to MinIO SUBNET",
 	OnUsageError: onUsageError,
-	Action:       mainAdminRegister,
+	Action:       mainAdminLogin,
 	Before:       setGlobalsFromContext,
 	Flags:        append(subnetCommonFlags, globalFlags...),
 	CustomHelpTemplate: `NAME:
@@ -46,19 +46,19 @@ FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}
 EXAMPLES:
-  1. Register the MinIO cluster with alias 'play' to SUBNET, using the alias as the cluster name.
+  1. Log in to MinIO SUBNET for the cluster with alias 'play'
      {{.Prompt}} {{.HelpName}} play
-  2. Register the MinIO cluster with alias 'play' to SUBNET using the name "play-cluster".
+  2. Log in to MinIO SUBNET for the cluster with alias 'play', naming it as "play-cluster" on SUBNET.
      {{.Prompt}} {{.HelpName}} play --name play-cluster
-  3. Register the MinIO cluster with alias 'play' to SUBNET, using the proxy https://192.168.1.3:3128
+  3. Log in to MinIO SUBNET for the cluster with alias 'play', using the proxy https://192.168.1.3:3128
      {{.Prompt}} {{.HelpName}} play --subnet-proxy https://192.168.1.3:3128
 `,
 }
 
-// checkAdminRegisterSyntax - validate arguments passed by a user
-func checkAdminRegisterSyntax(ctx *cli.Context) {
+// checkAdminLoginSyntax - validate arguments passed by a user
+func checkAdminLoginSyntax(ctx *cli.Context) {
 	if len(ctx.Args()) == 0 || len(ctx.Args()) > 1 {
-		cli.ShowCommandHelpAndExit(ctx, "register", 1) // last argument is exit code
+		cli.ShowCommandHelpAndExit(ctx, "login", 1) // last argument is exit code
 	}
 }
 
@@ -102,8 +102,8 @@ type SubnetMFAReq struct {
 	Token    string `json:"token"`
 }
 
-func mainAdminRegister(ctx *cli.Context) error {
-	checkAdminRegisterSyntax(ctx)
+func mainAdminLogin(ctx *cli.Context) error {
+	checkAdminLoginSyntax(ctx)
 
 	offlineMode := ctx.Bool("airgap") || ctx.Bool("offline")
 	if !offlineMode && !subnetReachable() {
