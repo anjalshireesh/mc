@@ -29,6 +29,10 @@ import (
 )
 
 func mainAdminSpeedTestNetperf(ctx *cli.Context, aliasedURL string) error {
+	return execSpeedTestNetperf(ctx, aliasedURL, nil)
+}
+
+func execSpeedTestNetperf(ctx *cli.Context, aliasedURL string, outChan chan SpeedTestResult) error {
 	client, perr := newAdminClient(aliasedURL)
 	if perr != nil {
 		fatalIf(perr.Trace(aliasedURL), "Unable to initialize admin client.")
@@ -64,13 +68,13 @@ func mainAdminSpeedTestNetperf(ctx *cli.Context, aliasedURL string) error {
 	if globalJSON {
 		select {
 		case err := <-errorCh:
-			printMsg(speedTestResult{
+			printMsg(SpeedTestResult{
 				Type:  netSpeedTest,
 				Err:   err.Error(),
 				Final: true,
 			})
 		case result := <-resultCh:
-			printMsg(speedTestResult{
+			printMsg(SpeedTestResult{
 				Type:      netSpeedTest,
 				NetResult: &result,
 				Final:     true,
@@ -93,21 +97,25 @@ func mainAdminSpeedTestNetperf(ctx *cli.Context, aliasedURL string) error {
 		for {
 			select {
 			case err := <-errorCh:
-				p.Send(speedTestResult{
+				p.Send(SpeedTestResult{
 					Type:  netSpeedTest,
 					Err:   err.Error(),
 					Final: true,
 				})
 				return
 			case result := <-resultCh:
-				p.Send(speedTestResult{
+				r := SpeedTestResult{
 					Type:      netSpeedTest,
 					NetResult: &result,
 					Final:     true,
-				})
+				}
+				p.Send(r)
+				if outChan != nil {
+					outChan <- r
+				}
 				return
 			default:
-				p.Send(speedTestResult{
+				p.Send(SpeedTestResult{
 					Type:      netSpeedTest,
 					NetResult: &madmin.NetperfResult{},
 				})

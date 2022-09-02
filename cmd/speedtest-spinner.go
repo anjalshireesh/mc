@@ -37,7 +37,7 @@ var whiteStyle = lipgloss.NewStyle().
 type speedTestUI struct {
 	spinner  spinner.Model
 	quitting bool
-	result   speedTestResult
+	result   SpeedTestResult
 }
 
 type speedTestType byte
@@ -60,7 +60,7 @@ func (s speedTestType) Name() string {
 	return "<unknown>"
 }
 
-type speedTestResult struct {
+type SpeedTestResult struct {
 	Type         speedTestType                 `json:"type"`
 	ObjectResult *madmin.SpeedTestResult       `json:"object,omitempty"`
 	NetResult    *madmin.NetperfResult         `json:"network,omitempty"`
@@ -92,7 +92,7 @@ func (m *speedTestUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		default:
 			return m, nil
 		}
-	case speedTestResult:
+	case SpeedTestResult:
 		m.result = msg
 		if msg.Final {
 			m.quitting = true

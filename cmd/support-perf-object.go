@@ -47,6 +47,9 @@ func mainAdminSpeedtest(ctx *cli.Context) error {
 }
 
 func mainAdminSpeedTestObject(ctx *cli.Context, aliasedURL string) error {
+	return execSpeedTestObject(ctx, aliasedURL, nil)
+}
+func execSpeedTestObject(ctx *cli.Context, aliasedURL string, outChan chan SpeedTestResult) error {
 	client, perr := newAdminClient(aliasedURL)
 	if perr != nil {
 		fatalIf(perr.Trace(aliasedURL), "Unable to initialize admin client.")
@@ -95,7 +98,7 @@ func mainAdminSpeedTestObject(ctx *cli.Context, aliasedURL string) error {
 
 	if globalJSON {
 		if speedTestErr != nil {
-			printMsg(speedTestResult{
+			printMsg(SpeedTestResult{
 				Type:  objectSpeedTest,
 				Err:   speedTestErr.Error(),
 				Final: true,
@@ -108,13 +111,13 @@ func mainAdminSpeedTestObject(ctx *cli.Context, aliasedURL string) error {
 			if result.Version == "" {
 				continue
 			}
-			printMsg(speedTestResult{
+			printMsg(SpeedTestResult{
 				Type:         objectSpeedTest,
 				ObjectResult: &result,
 			})
 		}
 
-		printMsg(speedTestResult{
+		printMsg(SpeedTestResult{
 			Type:         objectSpeedTest,
 			ObjectResult: &result,
 			Final:        true,
@@ -135,7 +138,7 @@ func mainAdminSpeedTestObject(ctx *cli.Context, aliasedURL string) error {
 
 	go func() {
 		if speedTestErr != nil {
-			p.Send(speedTestResult{
+			p.Send(SpeedTestResult{
 				Type:  objectSpeedTest,
 				Err:   speedTestErr.Error(),
 				Final: true,
@@ -145,16 +148,20 @@ func mainAdminSpeedTestObject(ctx *cli.Context, aliasedURL string) error {
 
 		var result madmin.SpeedTestResult
 		for result = range resultCh {
-			p.Send(speedTestResult{
+			p.Send(SpeedTestResult{
 				Type:         objectSpeedTest,
 				ObjectResult: &result,
 			})
 		}
-		p.Send(speedTestResult{
+		r := SpeedTestResult{
 			Type:         objectSpeedTest,
 			ObjectResult: &result,
 			Final:        true,
-		})
+		}
+		p.Send(r)
+		if outChan != nil {
+			outChan <- r
+		}
 	}()
 
 	<-done

@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -29,6 +30,10 @@ import (
 )
 
 func mainAdminSpeedTestDrive(ctx *cli.Context, aliasedURL string) error {
+	return execSpeedTestDrive(ctx, aliasedURL, nil)
+}
+
+func execSpeedTestDrive(ctx *cli.Context, aliasedURL string, outChan chan SpeedTestResult) error {
 	client, perr := newAdminClient(aliasedURL)
 	if perr != nil {
 		fatalIf(perr.Trace(aliasedURL), "Unable to initialize admin client.")
@@ -68,7 +73,7 @@ func mainAdminSpeedTestDrive(ctx *cli.Context, aliasedURL string) error {
 
 	if globalJSON {
 		if speedTestErr != nil {
-			printMsg(speedTestResult{
+			printMsg(SpeedTestResult{
 				Type:  driveSpeedTest,
 				Err:   speedTestErr.Error(),
 				Final: true,
@@ -82,7 +87,7 @@ func mainAdminSpeedTestDrive(ctx *cli.Context, aliasedURL string) error {
 				results = append(results, result)
 			}
 		}
-		printMsg(speedTestResult{
+		printMsg(SpeedTestResult{
 			Type:        driveSpeedTest,
 			DriveResult: results,
 			Final:       true,
@@ -103,7 +108,7 @@ func mainAdminSpeedTestDrive(ctx *cli.Context, aliasedURL string) error {
 
 	go func() {
 		if speedTestErr != nil {
-			printMsg(speedTestResult{
+			printMsg(SpeedTestResult{
 				Type: driveSpeedTest,
 				Err:  speedTestErr.Error(),
 			})
@@ -115,17 +120,22 @@ func mainAdminSpeedTestDrive(ctx *cli.Context, aliasedURL string) error {
 			if result.Version != "" {
 				results = append(results, result)
 			} else {
-				p.Send(speedTestResult{
+				p.Send(SpeedTestResult{
 					Type:        driveSpeedTest,
 					DriveResult: []madmin.DriveSpeedTestResult{},
 				})
 			}
 		}
-		p.Send(speedTestResult{
+		fmt.Println("Outside the resultCh loop")
+		r := SpeedTestResult{
 			Type:        driveSpeedTest,
 			DriveResult: results,
 			Final:       true,
-		})
+		}
+		p.Send(r)
+		if outChan != nil {
+			outChan <- r
+		}
 	}()
 
 	<-done
