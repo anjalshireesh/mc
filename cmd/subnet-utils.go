@@ -27,6 +27,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -174,8 +175,53 @@ func getSubnetClient() *http.Client {
 	return client
 }
 
-func subnetHTTPDo(req *http.Request) (*http.Response, error) {
-	return getSubnetClient().Do(req)
+func subnetHTTPDo(req *http.Request) (resp *http.Response, err error) {
+	resp, err = getSubnetClient().Do(req)
+	if err == nil && globalDebug {
+		dumpHTTPReq(req, resp)
+	}
+	return
+}
+
+// dumpHTTP - dump HTTP request and response.
+func dumpHTTPReq(req *http.Request, resp *http.Response) error {
+	// Starts http dump.
+	_, err := fmt.Fprintln(os.Stderr, "---------START-HTTP---------")
+	if err != nil {
+		return err
+	}
+
+	if auth := req.Header.Get("Authorization"); auth != "" {
+		req.Header.Set("Authorization", strings.Repeat("*", len(auth)))
+	}
+	// TODO: remove more sensitive information
+
+	// Only display request header.
+	reqTrace, err := httputil.DumpRequestOut(req, false)
+	if err != nil {
+		return err
+	}
+
+	// Write request to trace output.
+	_, err = fmt.Fprint(os.Stderr, string(reqTrace))
+	if err != nil {
+		return err
+	}
+
+	respTrace, err := httputil.DumpResponse(resp, true)
+	if err != nil {
+		return err
+	}
+
+	// Write response to trace output.
+	_, err = fmt.Fprint(os.Stderr, strings.TrimSuffix(string(respTrace), "\r\n"))
+	if err != nil {
+		return err
+	}
+
+	// Ends the http dump.
+	_, err = fmt.Fprintln(os.Stderr, "---------END-HTTP---------")
+	return err
 }
 
 func subnetReqDo(r *http.Request, headers map[string]string) (string, error) {
